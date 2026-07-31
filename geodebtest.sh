@@ -551,6 +551,22 @@ while IFS= read -r line; do
   [[ -n "$line" ]] && MIRRORS+=("$line")
 done < <(parse_mirrors "$MIRRORLIST")
 
+# The official country alias ftp.<cc>.debian.org is missing from the
+# masterlist for some countries (Sweden, for example, where the alias points
+# at mirror.accum.se, which is not registered either). Add it as a candidate
+# when it is not already listed and actually serves the archive. These alias
+# names often lack TLS certificates covering the alias, so plain http counts
+# here; pick_scheme makes the same https-to-http fallback in the benchmark.
+CC_ALIAS="ftp.$(printf '%s' "$COUNTRY" | tr '[:upper:]' '[:lower:]').debian.org"
+if ! printf '%s\n' "${MIRRORS[@]}" | cut -f1 | grep -Fxq "$CC_ALIAS"; then
+  if curl -fL -o /dev/null -sS --connect-timeout "$CONNECT_TIMEOUT" --max-time 10 \
+      "https://${CC_ALIAS}/debian/dists/${SUITE}/Release" >/dev/null 2>&1 || \
+     curl -fL -o /dev/null -sS --connect-timeout "$CONNECT_TIMEOUT" --max-time 10 \
+      "http://${CC_ALIAS}/debian/dists/${SUITE}/Release" >/dev/null 2>&1; then
+    MIRRORS+=("${CC_ALIAS}"$'\t'"/debian/")
+  fi
+fi
+
 TOTAL_FOUND="${#MIRRORS[@]}"
 if (( TOTAL_FOUND == 0 )); then
   echo "No registered Debian mirrors found for country ${COUNTRY} (arch ${ARCH})." >&2
