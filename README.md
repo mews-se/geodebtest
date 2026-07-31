@@ -64,7 +64,9 @@ What it does:
 
 ## Notes
 
-- Country detection uses ipapi.co with ipinfo.io as fallback. Only your
+- Country detection uses Cloudflare's trace endpoint (cloudflare.com and
+  1.1.1.1), with ipapi.co and ipinfo.io as fallbacks - the dedicated
+  geo-IP services are often on DNS blocklists (Pi-hole etc.). Only your
   public IP is sent, nothing else.
 - Mirror data comes from the official
   [Mirrors.masterlist](https://mirror-master.debian.org/status/Mirrors.masterlist).
