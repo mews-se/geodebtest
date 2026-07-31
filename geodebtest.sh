@@ -4,7 +4,7 @@ set -euo pipefail
 export LC_ALL=C
 export LANG=C
 
-SCRIPT_VERSION="v2026.07.31-2"
+SCRIPT_VERSION="v2026.07.31-3"
 
 ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
 SUITE="stable"
@@ -647,15 +647,23 @@ fi
 SOURCES_LIST="${APT_PREFIX}/etc/apt/sources.list"
 DEB822_SOURCES="${APT_PREFIX}/etc/apt/sources.list.d/debian.sources"
 
+# Backups must not live in sources.list.d - APT scans that directory and
+# prints an "invalid filename extension" notice on every run. They are
+# kept in a backups/ folder next to the script instead.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || pwd)"
+BACKUP_DIR="${SCRIPT_DIR}/backups"
+
 backup_file() {
   local file="$1"
   local backup
-  backup="${file}.bak_$(date +%Y%m%d_%H%M%S)"
+  mkdir -p "$BACKUP_DIR"
+  backup="${BACKUP_DIR}/$(basename "$file").bak_$(date +%Y%m%d_%H%M%S)"
   cp -p "$file" "$backup"
   printf '%s' "$backup"
 
   # Keep only the newest MAX_BACKUPS backups per file.
-  ls -1t "${file}".bak_* 2>/dev/null | tail -n +"$(( MAX_BACKUPS + 1 ))" \
+  ls -1t "${BACKUP_DIR}/$(basename "$file").bak_"* 2>/dev/null \
+    | tail -n +"$(( MAX_BACKUPS + 1 ))" \
     | while IFS= read -r old; do rm -f "$old"; done
 }
 

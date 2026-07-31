@@ -2,7 +2,7 @@
 
 [![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
 [![Bash](https://img.shields.io/badge/language-bash-green.svg)]()
-[![Version](https://img.shields.io/badge/version-v2026.07.31--2-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-v2026.07.31--3-orange.svg)]()
 
 Benchmark tool for Debian mirrors in your own country. A generalized
 version of [swedebtest](https://github.com/mews-se/swedebtest) that works
@@ -58,7 +58,8 @@ What it does:
 - Updates `/etc/apt/sources.list` and `/etc/apt/sources.list.d/debian.sources`
   (whichever exist), replacing only Debian archive mirrors -
   `security.debian.org` and third-party repos (Docker etc.) are never touched
-- Takes a timestamped backup of each file first (the 5 newest are kept)
+- Takes a timestamped backup of each file first, stored in a `backups/`
+  folder next to the script (the 5 newest per file are kept)
 - Validates the mirror and runs `apt-get update`; if it fails, the previous
   sources are restored automatically
 
