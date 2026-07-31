@@ -4,7 +4,7 @@ set -euo pipefail
 export LC_ALL=C
 export LANG=C
 
-SCRIPT_VERSION="v2026.07.31-3"
+SCRIPT_VERSION="v2026.07.31-4"
 
 ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
 SUITE="stable"
@@ -710,12 +710,15 @@ update_classic_sources() {
       if (slash == 0) { host = rest; path = "" }
       else { host = substr(rest, 1, slash - 1); path = substr(rest, slash) }
       if (host == "security.debian.org") return 0
+      if (path ~ /debian-security/) return 0
       if (host in K) return 1
       if (host ~ /\.debian\.org$/) return 1
       if (path == "/debian" || path == "/debian/") return 1
       return 0
     }
-    /^[[:space:]]*deb(-src)?([[:space:]]|\[)/ {
+    # Lines for a -security suite are never touched: the security archive
+    # lives at debian-security, not on the archive mirrors.
+    /^[[:space:]]*deb(-src)?([[:space:]]|\[)/ && $0 !~ /[[:space:]][^[:space:]]+-security([[:space:]]|$)/ {
       for (i = 1; i <= NF; i++) {
         if (is_archive_url($i)) {
           $i = base
@@ -747,7 +750,7 @@ update_deb822_sources() {
     BEGIN { RS = ""; FS = "\n"; OFS = "\n" }
     {
       if (NR > 1) printf "\n"
-      if ($0 ~ /security\.debian\.org/ || $0 ~ /Suites:[^\n]*-security/) {
+      if ($0 ~ /security\.debian\.org/ || $0 ~ /debian-security/ || $0 ~ /Suites:[^\n]*-security/) {
         print $0
         next
       }

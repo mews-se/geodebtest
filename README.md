@@ -2,7 +2,7 @@
 
 [![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
 [![Bash](https://img.shields.io/badge/language-bash-green.svg)]()
-[![Version](https://img.shields.io/badge/version-v2026.07.31--3-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-v2026.07.31--4-orange.svg)]()
 
 Benchmark tool for Debian mirrors in your own country. A generalized
 version of [swedebtest](https://github.com/mews-se/swedebtest) that works
