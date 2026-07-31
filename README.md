@@ -1,6 +1,7 @@
 # geodebtest
 
 [![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
+[![ShellCheck](https://github.com/mews-se/geodebtest/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/mews-se/geodebtest/actions/workflows/shellcheck.yml)
 [![Bash](https://img.shields.io/badge/language-bash-green.svg)]()
 [![Version](https://img.shields.io/badge/version-v2026.08.01-orange.svg)]()
 

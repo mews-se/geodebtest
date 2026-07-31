@@ -931,6 +931,7 @@ check_suite_consistency() {
   local system_codename=""
 
   [[ -r "$os_release" ]] || return 0
+  # shellcheck source=/dev/null
   system_codename="$(. "$os_release" 2>/dev/null; printf '%s' "${VERSION_CODENAME:-}")"
   [[ -n "$system_codename" ]] || return 0
 
