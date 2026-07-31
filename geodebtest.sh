@@ -161,23 +161,22 @@ fetch_mirrorlist() {
 }
 
 # Prints "host<TAB>path" for every mirror in the given country that serves
-# the archive over http for the requested architecture.
+# the archive over http. The masterlist's Archive-architecture field is often
+# stale (mirrors carrying arm64 listed without it, and vice versa), so
+# architecture support is verified live during the benchmark instead.
 parse_mirrors() {
   local list="$1"
-  awk -v country="$COUNTRY" -v arch="$ARCH" '
+  awk -v country="$COUNTRY" '
     BEGIN { RS = ""; FS = "\n" }
     {
-      site = ""; cc = ""; path = ""; archs = ""
+      site = ""; cc = ""; path = ""
       for (i = 1; i <= NF; i++) {
-        if ($i ~ /^Site: /)                      { site = substr($i, 7) }
-        else if ($i ~ /^Country: /)              { cc = substr($i, 10, 2) }
-        else if ($i ~ /^Archive-http: /)         { path = substr($i, 15) }
-        else if ($i ~ /^Archive-architecture: /) { archs = substr($i, 23) }
+        if ($i ~ /^Site: /)              { site = substr($i, 7) }
+        else if ($i ~ /^Country: /)      { cc = substr($i, 10, 2) }
+        else if ($i ~ /^Archive-http: /) { path = substr($i, 15) }
       }
       if (site != "" && cc == country && path != "") {
-        if (archs == "" || index(" " archs " ", " " arch " ") > 0) {
-          print site "\t" path
-        }
+        print site "\t" path
       }
     }
   ' "$list"
@@ -460,6 +459,17 @@ measure_mirror() {
   fi
 
   base="${scheme}://${host}${path}"
+
+  # Verify that the mirror actually carries the requested architecture; the
+  # masterlist metadata cannot be trusted for this.
+  if ! curl -fL -o /dev/null -sS --connect-timeout "$CONNECT_TIMEOUT" --max-time 10 \
+      "${base}dists/${SUITE}/main/binary-${ARCH}/Packages.xz" >/dev/null 2>&1 && \
+     ! curl -fL -o /dev/null -sS --connect-timeout "$CONNECT_TIMEOUT" --max-time 10 \
+      "${base}dists/${SUITE}/main/binary-${ARCH}/Packages.gz" >/dev/null 2>&1; then
+    echo "  ${host} does not serve ${ARCH} packages - skipping." >&2
+    printf '0\t%s\tNA\tNA\tNA\tNA\tNA\t%s\n' "$host" "$base"
+    return
+  fi
 
   if ! small_url="$(pick_small_file "$base")"; then
     printf '0\t%s\tNA\tNA\tNA\tNA\tNA\t%s\n' "$host" "$base"

@@ -12,6 +12,8 @@ anywhere.
 
 - Autodetects your country from your public IP (override with `--country`)
 - Fetches the current official mirror list from Debian (no hardcoded mirrors)
+- Verifies architecture support against each mirror instead of trusting the
+  mirror list metadata (which is often stale)
 - Measures ping, TTFB and download speed
 - Ranks mirrors from best to worst
 - Always includes the global CDN (`deb.debian.org`) as baseline
