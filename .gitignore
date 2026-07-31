@@ -1,0 +1,9 @@
+tmp/
+*.log
+*~
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+*.tsv
+*.csv
