@@ -2,7 +2,7 @@
 
 [![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
 [![Bash](https://img.shields.io/badge/language-bash-green.svg)]()
-[![Version](https://img.shields.io/badge/version-v2026.07.31--4-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-v2026.08.01-orange.svg)]()
 
 Benchmark tool for Debian mirrors in your own country. A generalized
 version of [swedebtest](https://github.com/mews-se/swedebtest) that works
@@ -17,6 +17,8 @@ anywhere.
 - Always includes the global CDN (`deb.debian.org`) as baseline
 - Shows best overall and best local mirror, as `sources.list` lines
 - Can apply the mirror you pick straight to your APT sources (see below)
+- Warns when any APT source still references another Debian release than
+  the running system (easy to miss after a release upgrade)
 
 ## Usage
 

@@ -4,7 +4,7 @@ set -euo pipefail
 export LC_ALL=C
 export LANG=C
 
-SCRIPT_VERSION="v2026.07.31-4"
+SCRIPT_VERSION="v2026.08.01"
 
 ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
 SUITE="stable"
@@ -891,4 +891,60 @@ offer_apply() {
   apply_mirror "$base" "$host"
 }
 
+# ---------------------------------------------------------------------------
+# Suite consistency check
+#
+# After a release upgrade it is easy to leave sources behind that still point
+# at the previous Debian release (third-party repos in particular). Compare
+# every enabled APT source against the running system's codename and warn
+# about lines that reference another release. Informational only.
+# ---------------------------------------------------------------------------
+
+check_suite_consistency() {
+  local os_release="${APT_PREFIX}/etc/os-release"
+  local system_codename=""
+
+  [[ -r "$os_release" ]] || return 0
+  system_codename="$(. "$os_release" 2>/dev/null; printf '%s' "${VERSION_CODENAME:-}")"
+  [[ -n "$system_codename" ]] || return 0
+
+  local -a known_codenames=(wheezy jessie stretch buster bullseye bookworm trixie forky sid)
+  local -a source_files=()
+  local file
+  [[ -f "$SOURCES_LIST" ]] && source_files+=("$SOURCES_LIST")
+  for file in "${APT_PREFIX}"/etc/apt/sources.list.d/*.list "${APT_PREFIX}"/etc/apt/sources.list.d/*.sources; do
+    [[ -f "$file" ]] && source_files+=("$file")
+  done
+  (( ${#source_files[@]} )) || return 0
+
+  local -a findings=()
+  local line codename lineno
+  for file in "${source_files[@]}"; do
+    lineno=0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      lineno=$(( lineno + 1 ))
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+      for codename in "${known_codenames[@]}"; do
+        [[ "$codename" == "$system_codename" ]] && continue
+        if [[ "$line" =~ (^|[^a-z])"$codename"([^a-z]|$) ]]; then
+          findings+=("${file}:${lineno}: ${line}")
+          break
+        fi
+      done
+    done < "$file"
+  done
+
+  echo
+  echo "Suite consistency check (system: ${system_codename}):"
+  if (( ${#findings[@]} == 0 )); then
+    echo "  OK - no APT source references another Debian release."
+  else
+    echo "  WARNING - these lines reference a different Debian release:"
+    printf '    %s\n' "${findings[@]}"
+    echo "  Review them - after a release upgrade old entries and third-party"
+    echo "  repos pointing at the previous release are easy to miss."
+  fi
+}
+
+check_suite_consistency
 offer_apply
