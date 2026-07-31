@@ -4,7 +4,7 @@ set -euo pipefail
 export LC_ALL=C
 export LANG=C
 
-SCRIPT_VERSION="v2026.07.31"
+SCRIPT_VERSION="v2026.07.31-2"
 
 ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
 SUITE="stable"
@@ -14,6 +14,11 @@ MAX_MIRRORS=10
 PING_COUNT=4
 CONNECT_TIMEOUT=5
 MAX_TIME=60
+APPLY=1
+MAX_BACKUPS=5
+
+# Prefix for /etc/apt paths, settable for testing against a fake tree.
+APT_PREFIX="${GEODEBTEST_APT_PREFIX:-}"
 
 MIRRORLIST_URL="https://mirror-master.debian.org/status/Mirrors.masterlist"
 GLOBAL_MIRROR="deb.debian.org"
@@ -21,11 +26,16 @@ GLOBAL_PATH="/debian/"
 
 usage() {
   cat <<EOF
-Usage: $0 [--country SE] [--suite stable] [--arch amd64] [--runs 3] [--max-mirrors 10]
+Usage: $0 [--country SE] [--suite stable] [--arch amd64] [--runs 3] [--max-mirrors 10] [--no-apply]
 
 Benchmarks the official Debian mirrors in your country (autodetected from
 your public IP unless --country is given) against the global CDN
 (${GLOBAL_MIRROR}) and recommends the fastest one.
+
+After the results you can pick a mirror by rank and have the script update
+your APT sources (classic sources.list and deb822 debian.sources), with a
+timestamped backup and automatic rollback if apt-get update fails.
+Use --no-apply to skip the interactive part (e.g. in scripts).
 
 Examples:
   $0
@@ -79,6 +89,10 @@ while [[ $# -gt 0 ]]; do
       fi
       MAX_MIRRORS="$2"
       shift 2
+      ;;
+    --no-apply)
+      APPLY=0
+      shift
       ;;
     --version)
       echo "$SCRIPT_VERSION"
@@ -627,3 +641,243 @@ if [[ -n "$BEST_LOCAL_LINE" ]]; then
   echo "  $BEST_LOCAL_HOST"
   echo "  deb ${BEST_LOCAL_BASE%/} ${SUITE} main contrib non-free non-free-firmware"
 fi
+
+# --- Optionally apply the chosen mirror to the APT sources -------------------
+
+SOURCES_LIST="${APT_PREFIX}/etc/apt/sources.list"
+DEB822_SOURCES="${APT_PREFIX}/etc/apt/sources.list.d/debian.sources"
+
+backup_file() {
+  local file="$1"
+  local backup
+  backup="${file}.bak_$(date +%Y%m%d_%H%M%S)"
+  cp -p "$file" "$backup"
+  printf '%s' "$backup"
+
+  # Keep only the newest MAX_BACKUPS backups per file.
+  ls -1t "${file}".bak_* 2>/dev/null | tail -n +"$(( MAX_BACKUPS + 1 ))" \
+    | while IFS= read -r old; do rm -f "$old"; done
+}
+
+# All Site: hosts in the masterlist that serve the archive, any country.
+# Used to tell Debian archive lines apart from third-party repos.
+known_mirror_hosts() {
+  local out="$WORKDIR/known_hosts.txt"
+  awk '
+    BEGIN { RS = ""; FS = "\n" }
+    {
+      site = ""; path = ""
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^Site: /)              { site = substr($i, 7) }
+        else if ($i ~ /^Archive-http: /) { path = substr($i, 15) }
+      }
+      if (site != "" && path != "") print site
+    }
+  ' "$MIRRORLIST" > "$out"
+  printf '%s' "$out"
+}
+
+# Rewrites archive mirror URLs in a classic sources.list. A line is only
+# rewritten if its host is a registered Debian mirror, a *.debian.org name,
+# or serves from the path /debian (typical for delisted mirrors). Third-party
+# repos (docker etc.) and security.debian.org are left untouched.
+update_classic_sources() {
+  local file="$1"
+  local base="$2"
+  local known
+  known="$(known_mirror_hosts)"
+  local tmp
+  tmp="$(mktemp "${WORKDIR}/sources.XXXXXX")"
+
+  awk -v base="${base%/}" -v knownfile="$known" '
+    BEGIN {
+      while ((getline h < knownfile) > 0) K[h] = 1
+      close(knownfile)
+    }
+    function is_archive_url(url,    rest, slash, host, path) {
+      if (url !~ /^https?:\/\//) return 0
+      rest = url
+      sub(/^https?:\/\//, "", rest)
+      slash = index(rest, "/")
+      if (slash == 0) { host = rest; path = "" }
+      else { host = substr(rest, 1, slash - 1); path = substr(rest, slash) }
+      if (host == "security.debian.org") return 0
+      if (host in K) return 1
+      if (host ~ /\.debian\.org$/) return 1
+      if (path == "/debian" || path == "/debian/") return 1
+      return 0
+    }
+    /^[[:space:]]*deb(-src)?([[:space:]]|\[)/ {
+      for (i = 1; i <= NF; i++) {
+        if (is_archive_url($i)) {
+          $i = base
+          break
+        }
+      }
+    }
+    { print }
+  ' "$file" > "$tmp"
+
+  if cmp -s "$file" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+
+  cat "$tmp" > "$file"
+  rm -f "$tmp"
+}
+
+# Rewrites URIs in a deb822 debian.sources. Stanzas mentioning security
+# are left untouched.
+update_deb822_sources() {
+  local file="$1"
+  local base="$2"
+  local tmp
+  tmp="$(mktemp "${WORKDIR}/deb822.XXXXXX")"
+
+  awk -v base="${base%/}" '
+    BEGIN { RS = ""; FS = "\n"; OFS = "\n" }
+    {
+      if (NR > 1) printf "\n"
+      if ($0 ~ /security\.debian\.org/ || $0 ~ /Suites:[^\n]*-security/) {
+        print $0
+        next
+      }
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^URIs:/) $i = "URIs: " base
+      }
+      print $0
+    }
+  ' "$file" > "$tmp"
+
+  if cmp -s "$file" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+
+  cat "$tmp" > "$file"
+  rm -f "$tmp"
+}
+
+apply_mirror() {
+  local base="$1"
+  local host="$2"
+
+  # Validate the mirror once more right before touching anything.
+  if ! curl -fsSL -o /dev/null --connect-timeout "$CONNECT_TIMEOUT" --max-time 15 \
+    "${base%/}/dists/${SUITE}/Release"; then
+    echo "Validation failed: ${base%/}/dists/${SUITE}/Release is not reachable. Aborting." >&2
+    return 1
+  fi
+
+  local -a changed_files=()
+  local -a backups=()
+  local backup
+
+  if [[ -f "$DEB822_SOURCES" ]] && grep -q '^URIs:' "$DEB822_SOURCES"; then
+    backup="$(backup_file "$DEB822_SOURCES")"
+    if update_deb822_sources "$DEB822_SOURCES" "$base"; then
+      changed_files+=("$DEB822_SOURCES")
+      backups+=("$backup")
+      echo "Updated $DEB822_SOURCES (backup: $backup)"
+    else
+      rm -f "$backup"
+      echo "$DEB822_SOURCES already uses this mirror, no change."
+    fi
+  fi
+
+  if [[ -f "$SOURCES_LIST" ]] && grep -qE '^[[:space:]]*deb(-src)?([[:space:]]|\[)' "$SOURCES_LIST"; then
+    backup="$(backup_file "$SOURCES_LIST")"
+    if update_classic_sources "$SOURCES_LIST" "$base"; then
+      changed_files+=("$SOURCES_LIST")
+      backups+=("$backup")
+      echo "Updated $SOURCES_LIST (backup: $backup)"
+    else
+      rm -f "$backup"
+      echo "$SOURCES_LIST already uses this mirror, no change."
+    fi
+  fi
+
+  if [[ ! -f "$DEB822_SOURCES" && ! -f "$SOURCES_LIST" ]]; then
+    echo "No APT sources found ($SOURCES_LIST or $DEB822_SOURCES). Nothing to update." >&2
+    return 1
+  fi
+
+  if (( ${#changed_files[@]} == 0 )); then
+    return 0
+  fi
+
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "apt-get not available - skipping verification (test mode)."
+    return 0
+  fi
+
+  echo "Running apt-get update to verify the new sources..."
+  if apt-get update; then
+    echo
+    echo "Done. APT now uses ${host}."
+    return 0
+  fi
+
+  echo "apt-get update failed - restoring previous sources." >&2
+  local i
+  for i in "${!changed_files[@]}"; do
+    cat "${backups[$i]}" > "${changed_files[$i]}"
+    echo "Restored ${changed_files[$i]} from ${backups[$i]}" >&2
+  done
+  return 1
+}
+
+offer_apply() {
+  (( APPLY == 1 )) || return 0
+
+  # Interactive part needs a terminal; skip silently in pipes/cron.
+  if ! { true < /dev/tty; } 2>/dev/null; then
+    return 0
+  fi
+
+  if ! command -v apt-get >/dev/null 2>&1 && [[ -z "$APT_PREFIX" ]]; then
+    return 0
+  fi
+
+  if [[ "$(id -u)" -ne 0 && -z "$APT_PREFIX" ]]; then
+    echo
+    echo "Note: not running as root - rerun with sudo to be able to update the APT sources."
+    return 0
+  fi
+
+  local total
+  total="$(wc -l < "$SORTED" | tr -d '[:space:]')"
+
+  echo
+  printf "Update APT sources to a mirror? Enter RANK [1-%s] or press Enter to skip: " "$total"
+
+  local choice
+  read -r choice < /dev/tty
+
+  if [[ -z "$choice" ]]; then
+    echo "Skipped."
+    return 0
+  fi
+
+  if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > total )); then
+    echo "Invalid choice: $choice - skipping." >&2
+    return 0
+  fi
+
+  local line score host base
+  line="$(sed -n "${choice}p" "$SORTED")"
+  score="$(printf '%s\n' "$line" | cut -f1)"
+  host="$(printf '%s\n' "$line" | cut -f2)"
+  base="$(printf '%s\n' "$line" | cut -f8)"
+
+  if ! score_is_positive "$score" || [[ "$base" == "NA" ]]; then
+    echo "Mirror ${host} did not respond during the benchmark - refusing to apply it." >&2
+    return 1
+  fi
+
+  echo "Applying ${host} (${base%/}) ..."
+  apply_mirror "$base" "$host"
+}
+
+offer_apply

@@ -2,7 +2,7 @@
 
 [![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
 [![Bash](https://img.shields.io/badge/language-bash-green.svg)]()
-[![Version](https://img.shields.io/badge/version-v2026.07.31-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-v2026.07.31--2-orange.svg)]()
 
 Benchmark tool for Debian mirrors in your own country. A generalized
 version of [swedebtest](https://github.com/mews-se/swedebtest) that works
@@ -16,6 +16,7 @@ anywhere.
 - Ranks mirrors from best to worst
 - Always includes the global CDN (`deb.debian.org`) as baseline
 - Shows best overall and best local mirror, as `sources.list` lines
+- Can apply the mirror you pick straight to your APT sources (see below)
 
 ## Usage
 
@@ -43,6 +44,23 @@ Best overall:
   deb.debian.org
   deb https://deb.debian.org/debian stable main contrib non-free non-free-firmware
 ```
+
+## Applying a mirror
+
+When run as root on a Debian system, the script offers to update your APT
+sources after the benchmark: enter the RANK number of the mirror you want,
+or press Enter to skip. Use `--no-apply` to disable the prompt entirely
+(the prompt is also skipped automatically when there is no terminal, e.g.
+in cron).
+
+What it does:
+
+- Updates `/etc/apt/sources.list` and `/etc/apt/sources.list.d/debian.sources`
+  (whichever exist), replacing only Debian archive mirrors -
+  `security.debian.org` and third-party repos (Docker etc.) are never touched
+- Takes a timestamped backup of each file first (the 5 newest are kept)
+- Validates the mirror and runs `apt-get update`; if it fails, the previous
+  sources are restored automatically
 
 ## Notes
 
