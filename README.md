@@ -1,6 +1,6 @@
 # geodebtest
 
-[![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![ShellCheck](https://github.com/mews-se/geodebtest/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/mews-se/geodebtest/actions/workflows/shellcheck.yml)
 [![Bash](https://img.shields.io/badge/language-bash-green.svg)]()
 [![Version](https://img.shields.io/badge/version-v2026.08.01-orange.svg)]()
@@ -83,4 +83,4 @@ What it does:
 
 ## License
 
-This project is released under The Unlicense.
+This project is licensed under the MIT License.
