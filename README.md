@@ -5,9 +5,9 @@
 [![Bash](https://img.shields.io/badge/language-bash-green.svg)]()
 [![Version](https://img.shields.io/badge/version-v2026.08.01-orange.svg)]()
 
-Benchmark tool for Debian mirrors in your own country. A generalized
-version of [swedebtest](https://github.com/mews-se/swedebtest) that works
-anywhere.
+Benchmark tool for Debian mirrors in your own country. Autodetects your
+location, fetches the official mirror list and finds the fastest mirrors
+near you.
 
 ## Features
 
