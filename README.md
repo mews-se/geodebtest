@@ -1,9 +1,10 @@
 # geodebtest
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+![Version](https://img.shields.io/badge/version-v2026.08.01-informational)
 [![ShellCheck](https://github.com/mews-se/geodebtest/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/mews-se/geodebtest/actions/workflows/shellcheck.yml)
-[![Bash](https://img.shields.io/badge/language-bash-green.svg)]()
-[![Version](https://img.shields.io/badge/version-v2026.08.01-orange.svg)]()
+![Shell: Bash](https://img.shields.io/badge/shell-bash-4EAA25.svg?logo=gnubash&logoColor=white)
+![Platform: Debian based](https://img.shields.io/badge/platform-Debian%20based-A81D33.svg?logo=debian&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Benchmark tool for Debian mirrors in your own country. Autodetects your
 location, fetches the official mirror list and finds the fastest mirrors
