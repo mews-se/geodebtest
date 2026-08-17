@@ -4,7 +4,7 @@ set -euo pipefail
 export LC_ALL=C
 export LANG=C
 
-SCRIPT_VERSION="v2026.08.01"
+SCRIPT_VERSION="v2026.08.17"
 
 ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
 SUITE="stable"
@@ -26,7 +26,7 @@ GLOBAL_PATH="/debian/"
 
 usage() {
   cat <<EOF
-Usage: $0 [--country SE] [--suite stable] [--arch amd64] [--runs 3] [--max-mirrors 10] [--no-apply]
+Usage: $0 [--country SE] [--suite stable] [--arch amd64] [--runs 3] [--max-mirrors 10] [--no-apply] [--version]
 
 Benchmarks the official Debian mirrors in your country (autodetected from
 your public IP unless --country is given) against the global CDN
@@ -134,7 +134,8 @@ detect_country() {
   for url in "https://www.cloudflare.com/cdn-cgi/trace" "https://1.1.1.1/cdn-cgi/trace"; do
     cc="$(curl -fsS --connect-timeout "$CONNECT_TIMEOUT" --max-time 10 "$url" 2>/dev/null \
       | awk -F= '/^loc=/ { print $2; exit }' | tr -d '[:space:]')" || continue
-    if [[ "$cc" =~ ^[A-Za-z]{2}$ ]]; then
+    # XX is cloudflare's marker for an unresolvable location - keep looking
+    if [[ "$cc" =~ ^[A-Za-z]{2}$ && "${cc^^}" != XX ]]; then
       printf '%s' "$cc" | tr '[:lower:]' '[:upper:]'
       return 0
     fi
@@ -293,7 +294,7 @@ pick_large_file() {
 
   local candidates=(
     "${base}dists/${SUITE}/main/Contents-${ARCH}.gz"
-    "${base}dists/${SUITE}/Contents-all.gz"
+    "${base}dists/${SUITE}/main/Contents-all.gz"
     "${base}dists/${SUITE}/main/binary-${ARCH}/Packages.xz"
     "${base}dists/${SUITE}/main/binary-${ARCH}/Packages.gz"
   )
@@ -551,22 +552,6 @@ while IFS= read -r line; do
   [[ -n "$line" ]] && MIRRORS+=("$line")
 done < <(parse_mirrors "$MIRRORLIST")
 
-# The official country alias ftp.<cc>.debian.org is missing from the
-# masterlist for some countries (Sweden, for example, where the alias points
-# at mirror.accum.se, which is not registered either). Add it as a candidate
-# when it is not already listed and actually serves the archive. These alias
-# names often lack TLS certificates covering the alias, so plain http counts
-# here; pick_scheme makes the same https-to-http fallback in the benchmark.
-CC_ALIAS="ftp.$(printf '%s' "$COUNTRY" | tr '[:upper:]' '[:lower:]').debian.org"
-if ! printf '%s\n' "${MIRRORS[@]}" | cut -f1 | grep -Fxq "$CC_ALIAS"; then
-  if curl -fL -o /dev/null -sS --connect-timeout "$CONNECT_TIMEOUT" --max-time 10 \
-      "https://${CC_ALIAS}/debian/dists/${SUITE}/Release" >/dev/null 2>&1 || \
-     curl -fL -o /dev/null -sS --connect-timeout "$CONNECT_TIMEOUT" --max-time 10 \
-      "http://${CC_ALIAS}/debian/dists/${SUITE}/Release" >/dev/null 2>&1; then
-    MIRRORS+=("${CC_ALIAS}"$'\t'"/debian/")
-  fi
-fi
-
 TOTAL_FOUND="${#MIRRORS[@]}"
 if (( TOTAL_FOUND == 0 )); then
   echo "No registered Debian mirrors found for country ${COUNTRY} (arch ${ARCH})." >&2
@@ -576,6 +561,26 @@ elif (( TOTAL_FOUND > MAX_MIRRORS )); then
   MIRRORS=("${MIRRORS[@]:0:MAX_MIRRORS}")
 else
   echo "Found ${TOTAL_FOUND} mirrors in ${COUNTRY}." >&2
+fi
+
+# The official country alias ftp.<cc>.debian.org is missing from the
+# masterlist for some countries (Sweden, for example, where the alias points
+# at mirror.accum.se, which is not registered either). Add it as a candidate
+# when it is not already listed and actually serves the archive. These alias
+# names often lack TLS certificates covering the alias, so plain http counts
+# here; pick_scheme makes the same https-to-http fallback in the benchmark.
+# Appended after the cap so the promised alias never falls off the list end;
+# debian labels the United Kingdom uk, not gb.
+cc_label="$(printf '%s' "$COUNTRY" | tr '[:upper:]' '[:lower:]')"
+[[ "$cc_label" == gb ]] && cc_label=uk
+CC_ALIAS="ftp.${cc_label}.debian.org"
+if ! printf '%s\n' "${MIRRORS[@]}" | cut -f1 | grep -Fxq "$CC_ALIAS"; then
+  if curl -fL -o /dev/null -sS --connect-timeout "$CONNECT_TIMEOUT" --max-time 10 \
+      "https://${CC_ALIAS}/debian/dists/${SUITE}/Release" >/dev/null 2>&1 || \
+     curl -fL -o /dev/null -sS --connect-timeout "$CONNECT_TIMEOUT" --max-time 10 \
+      "http://${CC_ALIAS}/debian/dists/${SUITE}/Release" >/dev/null 2>&1; then
+    MIRRORS+=("${CC_ALIAS}"$'\t'"/debian/")
+  fi
 fi
 
 MIRRORS+=("${GLOBAL_MIRROR}"$'\t'"${GLOBAL_PATH}")
@@ -647,6 +652,7 @@ if [[ -z "$BEST_LINE" ]]; then
   echo
   echo "No mirror responded successfully - no recommendation." >&2
   echo "Check the suite name (--suite ${SUITE}) and your network connection." >&2
+  echo "A very slow connection can also hit the ${MAX_TIME}s per-download cap." >&2
   exit 1
 fi
 
@@ -780,10 +786,18 @@ update_deb822_sources() {
         print $0
         next
       }
+      out = ""
+      skip = 0
       for (i = 1; i <= NF; i++) {
-        if ($i ~ /^URIs:/) $i = "URIs: " base
+        # deb822 allows folded continuation lines under URIs: - drop them
+        # along with the rewrite or the old mirror stays active
+        if (skip && $i ~ /^[ \t]/) continue
+        skip = 0
+        line = $i
+        if (line ~ /^URIs:/) { line = "URIs: " base; skip = 1 }
+        out = out (out == "" ? "" : "\n") line
       }
-      print $0
+      print out
     }
   ' "$file" > "$tmp"
 
@@ -935,7 +949,7 @@ check_suite_consistency() {
   system_codename="$(. "$os_release" 2>/dev/null; printf '%s' "${VERSION_CODENAME:-}")"
   [[ -n "$system_codename" ]] || return 0
 
-  local -a known_codenames=(wheezy jessie stretch buster bullseye bookworm trixie forky sid)
+  local -a known_codenames=(wheezy jessie stretch buster bullseye bookworm trixie forky duke sid)
   local -a source_files=()
   local file
   [[ -f "$SOURCES_LIST" ]] && source_files+=("$SOURCES_LIST")

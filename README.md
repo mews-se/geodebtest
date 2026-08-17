@@ -1,6 +1,6 @@
 # geodebtest
 
-![Version](https://img.shields.io/badge/version-v2026.08.01-informational)
+![Version](https://img.shields.io/badge/version-v2026.08.17-informational)
 [![ShellCheck](https://github.com/mews-se/geodebtest/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/mews-se/geodebtest/actions/workflows/shellcheck.yml)
 ![Shell: Bash](https://img.shields.io/badge/shell-bash-4EAA25.svg?logo=gnubash&logoColor=white)
 ![Platform: Debian based](https://img.shields.io/badge/platform-Debian%20based-A81D33.svg?logo=debian&logoColor=white)
@@ -45,7 +45,7 @@ Optional:
 
 ```
 RANK SCORE HOST                           PING      TTFB      SPEED
-1    780   deb.debian.org                 1.0 ms    0.016 s   84.76 MiB/s
+1    780   deb.debian.org                 1.0 ms    0.016 s   84.76 MiB/s <<< BEST
 
 Recommendation:
 Best overall:
