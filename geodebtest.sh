@@ -4,7 +4,7 @@ set -euo pipefail
 export LC_ALL=C
 export LANG=C
 
-SCRIPT_VERSION="v2026.08.17"
+SCRIPT_VERSION="v2026.09.18"
 
 ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
 SUITE="stable"
@@ -531,6 +531,14 @@ measure_mirror() {
     "$mspeed" \
     "$base"
 }
+
+# Same conditions as offer_apply, checked before the benchmark instead of after.
+if (( APPLY == 1 )) && [[ -z "$APT_PREFIX" && "$(id -u)" -ne 0 ]] \
+  && command -v apt-get >/dev/null 2>&1 && { true < /dev/tty; } 2>/dev/null; then
+  echo "Note: not running as root - the benchmark runs fine, but updating the APT" >&2
+  echo "sources afterwards needs root. Press Ctrl+C and rerun with sudo for that." >&2
+  echo >&2
+fi
 
 if [[ -z "$COUNTRY" ]]; then
   echo "Detecting country from public IP..." >&2

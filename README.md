@@ -1,6 +1,6 @@
 # geodebtest
 
-![Version](https://img.shields.io/badge/version-v2026.08.17-informational)
+![Version](https://img.shields.io/badge/version-v2026.09.18-informational)
 [![ShellCheck](https://github.com/mews-se/geodebtest/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/mews-se/geodebtest/actions/workflows/shellcheck.yml)
 ![Shell: Bash](https://img.shields.io/badge/shell-bash-4EAA25.svg?logo=gnubash&logoColor=white)
 ![Platform: Debian based](https://img.shields.io/badge/platform-Debian%20based-A81D33.svg?logo=debian&logoColor=white)
@@ -59,7 +59,8 @@ When run as root on a Debian system, the script offers to update your APT
 sources after the benchmark: enter the RANK number of the mirror you want,
 or press Enter to skip. Use `--no-apply` to disable the prompt entirely
 (the prompt is also skipped automatically when there is no terminal, e.g.
-in cron).
+in cron). Without root the script says so before the benchmark starts, so
+you can rerun it with `sudo` right away instead of finding out at the end.
 
 What it does:
 
