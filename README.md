@@ -29,11 +29,20 @@ near you.
 ## Usage
 
 ```bash
-chmod +x geodebtest.sh
+git clone https://github.com/mews-se/geodebtest.git
+cd geodebtest
 ./geodebtest.sh
 ```
 
-Optional:
+All options, as `--help` lists them:
+
+```
+./geodebtest.sh [--country SE] [--suite stable] [--arch amd64] [--runs 3] [--max-mirrors 10] [--no-apply] [--version]
+```
+
+The suite, run count and mirror cap shown are the defaults; without `--arch`
+and `--country` the script uses the system's own architecture and the detected
+country. For example:
 
 ```bash
 ./geodebtest.sh --country DE
@@ -44,13 +53,23 @@ Optional:
 ## Example output
 
 ```
-RANK SCORE HOST                           PING      TTFB      SPEED
-1    780   deb.debian.org                 1.0 ms    0.016 s   84.76 MiB/s <<< BEST
+RANK SCORE  HOST                            PING       TTFB       SPEED
+--------------------------------------------------------------------------------
+1    700    deb.debian.org                  1.9 ms     0.016 s    106.43 MiB/s    <<< BEST
+2    630    mirror.netcologne.de            4.6 ms     0.024 s    81.87 MiB/s
+3    580    ftp.de.debian.org               7.3 ms     0.031 s    58.71 MiB/s
 
 Recommendation:
 Best overall:
   deb.debian.org
   deb https://deb.debian.org/debian stable main contrib non-free non-free-firmware
+
+Best local mirror (DE):
+  mirror.netcologne.de
+  deb https://mirror.netcologne.de/debian stable main contrib non-free non-free-firmware
+
+Suite consistency check (system: trixie):
+  OK - no APT source references another Debian release.
 ```
 
 ## Applying a mirror
@@ -65,7 +84,7 @@ you can rerun it with `sudo` right away instead of finding out at the end.
 What it does:
 
 - Updates `/etc/apt/sources.list` and `/etc/apt/sources.list.d/debian.sources`
-  (whichever exist), replacing only Debian archive mirrors -
+  (whichever exist), replacing only Debian archive mirrors;
   `security.debian.org` and third-party repos (Docker etc.) are never touched
 - Takes a timestamped backup of each file first, stored in a `backups/`
   folder next to the script (the 5 newest per file are kept)
@@ -75,13 +94,15 @@ What it does:
 ## Notes
 
 - Country detection uses Cloudflare's trace endpoint (cloudflare.com and
-  1.1.1.1), with ipapi.co and ipinfo.io as fallbacks - the dedicated
-  geo-IP services are often on DNS blocklists (Pi-hole etc.). Only your
-  public IP is sent, nothing else.
+  1.1.1.1) first, since the dedicated geo-IP services are often on DNS
+  blocklists (Pi-hole etc.); ipapi.co and ipinfo.io are the fallbacks. Only
+  your public IP is sent, nothing else.
 - Mirror data comes from the official
   [Mirrors.masterlist](https://mirror-master.debian.org/status/Mirrors.masterlist).
 - Countries with many mirrors are capped at 10 by default; raise with
   `--max-mirrors`.
+- Needs bash, curl, awk, sed, grep and coreutils. `ping` is optional; without
+  it the ping test is skipped.
 
 ## License
 
